@@ -1,0 +1,9 @@
+*.csv
+*.xlsx
+*.h5
+*.wav
+*.keras
+wtfmath.py
+looper.ipynb
+main.ipynb
+filter.ipynb
