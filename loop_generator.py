@@ -1,9 +1,10 @@
 import pandas as pd
 import numpy as np
 import h5py
-import wave
 import scipy.io.wavfile as wavf
 import os
+from tqdm import tqdm
+from concurrent.futures import ThreadPoolExecutor
 
 class LoopGenerator:
     def __init__(self, swing=.55, velocity_var=.1, note_var=2/12, dir_path="loops", bpm_min=70, bpm_max=180): # swing of .5 is neutral
@@ -15,7 +16,9 @@ class LoopGenerator:
         self.bpm_max = bpm_max
         self.cat_and_sub_cat_id = int(0)
         self.new_sub_cat_files = []
+        self.new_sub_cat_audio = []
         self.new_files = pd.DataFrame()
+        self.new_audio = pd.DataFrame()
         self.old_files = pd.DataFrame()
 
         try:
@@ -61,6 +64,7 @@ class LoopGenerator:
     def generate_loops(self, samples, patterns, num_of_loop_samples, cat):
         self.old_files = pd.DataFrame()
         self.new_sub_cat_files= []
+        self.new_sub_cat_audio = []
         pat_type = [cat, "Global"]
         
         sub_cats = samples['sub_category'].unique()
@@ -100,7 +104,11 @@ class LoopGenerator:
         
         if isinstance(self.new_sub_cat_files, list):
             self.new_sub_cat_files = pd.DataFrame(self.new_sub_cat_files)
+        if isinstance(self.new_sub_cat_audio, list):
+            self.new_sub_cat_audio = pd.DataFrame(self.new_sub_cat_audio)
+
         self.new_files = pd.concat([self.new_files, self.new_sub_cat_files], ignore_index=True)
+        self.new_audio = pd.concat([self.new_audio, self.new_sub_cat_audio], ignore_index=True)
     
     # edit og dataframe to show the loop id of each sample
     def generate_loop(self, pattern, rows):
@@ -178,8 +186,14 @@ class LoopGenerator:
         new_row['Loop'] = 1
         for key in ['Loop_id', 'One_Shot_Intent', 'level_0', 'index']:
             new_row.pop(key, None)
+        
+        new_audio_row = {}
+        new_audio_row['id'] = self.id
+        new_audio_row['sample_rate'] = sr
+        new_audio_row['waveform'] = loop
 
         self.new_sub_cat_files.append(new_row)
+        self.new_sub_cat_audio.append(new_audio_row)
 
         self.id += 1
         self.cat_and_sub_cat_id += 1
@@ -187,3 +201,21 @@ class LoopGenerator:
     
     def save_updates(self):
         self.new_files.to_csv('audio_metadata - loops.csv', sep=',')
+        dt = h5py.string_dtype(encoding='utf-8')
+
+        with h5py.File("generated_loop_data.h5", "w") as f:
+            meta_data = f.create_group("meta_data")
+            meta_data.create_dataset('index', data=np.array(self.new_files['id'], dtype='int'))
+            meta_data.create_dataset('path', data=np.array(self.new_files['file_path'], dtype=dt))
+            meta_data.create_dataset('name', data=np.array(self.new_files['file_name'], dtype=dt))
+
+            audio_data = f.create_group('audio_data')
+
+            def save_sample(row):
+                sample_group = audio_data.create_group(str(row['id']))
+                sample_group.create_dataset('waveform', data=row['waveform'], compression='gzip')
+                sample_group.create_dataset('sample_rate', data=row['sample_rate'])
+
+            # Use ThreadPoolExecutor for parallelism
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                list(tqdm(executor.map(save_sample, [row for _, row in self.new_audio.iterrows()]), total=len(self.new_audio)))
