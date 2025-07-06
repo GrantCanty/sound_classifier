@@ -5,10 +5,6 @@ import wave
 import scipy.io.wavfile as wavf
 import os
 
-# i think i messed this up. i need to pass all of the data to the LoopGenerator
-# and then do looping inside. way too confusing to pass one sample at a time inside the generator
-# this lets me update the dataframe and save it once at a time. can also explore parallelism inside
-# the LoopGenerator class
 class LoopGenerator:
     def __init__(self, swing=.55, velocity_var=.1, note_var=2/12, dir_path="loops", bpm_min=70, bpm_max=180): # swing of .5 is neutral
         self.swing = swing
@@ -100,19 +96,11 @@ class LoopGenerator:
                     self.generate_loop(pattern, rows)
                     nums = []
             
-            #samples_split.set_index('id', inplace=True)
-
-            #samples.update(samples_split)
-            #self.old_files = samples
+            self.old_files = pd.concat([self.old_files, samples_split], ignore_index=True)
         
-        #print(self.new_files)
         if isinstance(self.new_sub_cat_files, list):
             self.new_sub_cat_files = pd.DataFrame(self.new_sub_cat_files)
-        #print(new_files)
         self.new_files = pd.concat([self.new_files, self.new_sub_cat_files], ignore_index=True)
-
-        #self.old_files = pd.concat([self.old_files, merged], ignore_index=True)
-
     
     # edit og dataframe to show the loop id of each sample
     def generate_loop(self, pattern, rows):
@@ -130,8 +118,6 @@ class LoopGenerator:
         loop_samples = int(np.ceil(loop_duration * sample_rate))
         new_loop = np.zeros(loop_samples, dtype=np.float32)
 
-        #ids = rows['id'].to_list()
-        # print(f'number of bars: {int(num_of_beats/4)} cat: {cat} sub_cat: {sub_cat} row_id: {ids} bpm: {bpm}')
         for bar in range(int(num_of_beats/4)):
             for i, hit in enumerate(pattern):
                 if hit > 0:
@@ -154,8 +140,6 @@ class LoopGenerator:
         new_loop = self.soft_limit(new_loop)
         rows_copy = rows.drop(columns=['waveform', 'sample_rate'], inplace=False)
         self.save_loop(sample_rate, new_loop, cat, sub_cat, rows_copy)
-        #self.save_dataframe()
-        #print(self.new_files)
 
 
     def soft_limit(self, loop, threshold=.96, max_val=1):
@@ -176,33 +160,16 @@ class LoopGenerator:
         os.makedirs(self.dir_path, exist_ok=True)
         os.makedirs(os.path.join(self.dir_path, category), exist_ok=True)
         
-        #print(os.path.join(self.dir_path, category, f'{category}_{id}.wav'))
-        
         loop = (loop * (2 ** 15 - 1)).astype("<h")
         if pd.isna(sub_category):
-            #wavf.write(os.path.join(self.dir_path, category, f'{category}_{self.id}.wav'), sr, loop)
             file_name = f'{category}_{self.cat_and_sub_cat_id}.wav'
             file_path = os.path.join(self.dir_path, category, file_name)
-            #print(file_path)
         else:
-            #wavf.write(os.path.join(self.dir_path, category, f'{category}_{sub_category}_{self.id}.wav'), sr, loop)
             os.makedirs(os.path.join(self.dir_path, category, sub_category), exist_ok=True)
             file_name = f'{sub_category}_{category}_{self.cat_and_sub_cat_id}.wav'
             file_path = os.path.join(self.dir_path, category, sub_category, file_name)
-            #print(file_path)
+        wavf.write(file_path, sr, loop)
         
-        
-
-        #rows['Loop_id'] = self.id
-
-        '''new_row = pd.DataFrame(columns=rows.columns)
-        new_row = rows.iloc[0]
-        new_row['id'] = self.id
-        new_row['file_path'] = file_path
-        new_row['file_name'] = file_name
-        new_row.drop(columns=['Loop_id', 'One_Shot_Intent'], inplace=True)'''
-
-        #print(rows)
         new_row = rows.iloc[0].to_dict()
         new_row['id'] = self.id
         new_row['file_path'] = file_path
@@ -212,10 +179,7 @@ class LoopGenerator:
         for key in ['Loop_id', 'One_Shot_Intent', 'level_0', 'index']:
             new_row.pop(key, None)
 
-        #print(new_row)
         self.new_sub_cat_files.append(new_row)
-
-
 
         self.id += 1
         self.cat_and_sub_cat_id += 1
