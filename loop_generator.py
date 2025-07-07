@@ -26,10 +26,10 @@ class LoopGenerator:
         except:
             self.existing_files_df = pd.DataFrame()
             self.existing_files = False
-            self.id = int(0)
+            self.id = int(-1)
         else:
             self.existing_files = True
-            self.id = int(self.existing_files_df['id'].max())
+            self.id = int(self.existing_files_df['id'].min()-1)
 
 
     def safety_guard(self, pattern: list, audio: list, sr: list, category: list, sub_category: list):
@@ -169,6 +169,7 @@ class LoopGenerator:
         os.makedirs(self.dir_path, exist_ok=True)
         os.makedirs(os.path.join(self.dir_path, category), exist_ok=True)
         
+        float_loop = loop.copy()
         loop = (loop * (2 ** 15 - 1)).astype("<h")
         if pd.isna(sub_category):
             file_name = f'{category}_{self.cat_and_sub_cat_id}.wav'
@@ -191,12 +192,12 @@ class LoopGenerator:
         new_audio_row = {}
         new_audio_row['id'] = self.id
         new_audio_row['sample_rate'] = sr
-        new_audio_row['waveform'] = loop
+        new_audio_row['waveform'] = float_loop
 
         self.new_sub_cat_files.append(new_row)
         self.new_sub_cat_audio.append(new_audio_row)
 
-        self.id += 1
+        self.id -= 1
         self.cat_and_sub_cat_id += 1
 
     
