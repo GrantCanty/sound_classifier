@@ -186,7 +186,9 @@ class LoopGenerator:
         new_row['file_name'] = file_name
         new_row['One_Shot'] = 0
         new_row['Loop'] = 1
-        for key in ['Loop_id', 'One_Shot_Intent', 'level_0', 'index']:
+        new_row['One_Shot_Intent'] = 0
+        new_row['Loop_Intent'] = 1
+        for key in ['Loop_id', 'level_0', 'index']:
             new_row.pop(key, None)
         
         new_audio_row = {}
