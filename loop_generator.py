@@ -17,8 +17,8 @@ class LoopGenerator:
         self.cat_and_sub_cat_id = int(0)
         self.new_sub_cat_files = []
         self.new_sub_cat_audio = []
-        self.new_files = pd.DataFrame()
-        self.new_audio = pd.DataFrame()
+        self.generated_files_metadata = pd.DataFrame()
+        self.generated_files_audio = pd.DataFrame()
         self.old_files = pd.DataFrame()
 
         try:
@@ -52,7 +52,7 @@ class LoopGenerator:
         
         # pattern cannot be empty
         if len(pattern) < 8:
-            raise Exception(f'Pattern is too small. Length of {len(self.pattern)} is < 8 steps')
+            raise Exception(f'Pattern is too small. Length of {len(pattern)} is < 8 steps')
         
         return sample_rate, cat, sub_cat
     
@@ -68,7 +68,6 @@ class LoopGenerator:
         pat_type = [cat, "Global"]
         
         sub_cats = samples['sub_category'].unique()
-        #samples.set_index('id', inplace=True)
         for sub_cat in sub_cats:
             self.cat_and_sub_cat_id = 0
             if pd.isna(sub_cat):
@@ -83,8 +82,8 @@ class LoopGenerator:
             samples_split.reset_index(drop=False, inplace=True)
             if self.existing_files:
                 vals = vals['file_path'].str.split('_', expand=True)
-                vals = vals[len(vals.columns)-1].split('.', expand=True)[0]
-                self.cat_and_sub_cat_id = vals.max()
+                vals = vals[len(vals.columns)-1].str.extract(r'(\d+)\.')[0].dropna().astype(int)
+                self.cat_and_sub_cat_id = vals.max() if not vals.empty else 0
             
             nums = []
             for index, _ in samples_split.iterrows():
@@ -107,9 +106,10 @@ class LoopGenerator:
         if isinstance(self.new_sub_cat_audio, list):
             self.new_sub_cat_audio = pd.DataFrame(self.new_sub_cat_audio)
 
-        self.new_files = pd.concat([self.new_files, self.new_sub_cat_files], ignore_index=True)
-        self.new_audio = pd.concat([self.new_audio, self.new_sub_cat_audio], ignore_index=True)
+        self.generated_files_metadata = pd.concat([self.generated_files_metadata, self.new_sub_cat_files], ignore_index=True)
+        self.generated_files_audio = pd.concat([self.generated_files_audio, self.new_sub_cat_audio], ignore_index=True)
     
+
     # edit og dataframe to show the loop id of each sample
     def generate_loop(self, pattern, rows):
         audio = rows['waveform'].to_list()
@@ -133,6 +133,7 @@ class LoopGenerator:
                         velocity = (1-self.velocity_var) * np.random.random_sample() + self.velocity_var
                         sample_idx = np.random.randint(len(audio))
                         sample = audio[sample_idx]
+                        sample = sample * velocity
                         
                         total_step = i + (bar * len(pattern))
                         start_idx = int((total_step * sample_rate * beat_time / 4) + ((sample_rate / hit) * j))
@@ -200,22 +201,45 @@ class LoopGenerator:
 
     
     def save_updates(self):
-        self.new_files.to_csv('audio_metadata - loops.csv', sep=',')
-        dt = h5py.string_dtype(encoding='utf-8')
+        if len(self.generated_files_metadata) >0:
+            if self.existing_files and not self.generated_files_metadata.empty:
+                self.generated_files_metadata = pd.concat([self.existing_files_df, self.generated_files_metadata], ignore_index=True)
+            self.generated_files_metadata.to_csv('audio_metadata - loops.csv', sep=',', index=False)
+            
+            if not self.generated_files_metadata.empty:
+                dt = h5py.string_dtype(encoding='utf-8')
+                h5_path = "generated_loop_data.h5"
+                
+                mode = "r+" if os.path.exists(h5_path) else "w"
+                with h5py.File(h5_path, mode) as f:
+                    if "meta_data" not in f:
+                        meta_data = f.create_group("meta_data")
+                        meta_data.create_dataset('index', data=np.array(self.generated_files_metadata['id'], dtype='int'))
+                        meta_data.create_dataset('path', data=np.array(self.generated_files_metadata['file_path'], dtype=dt))
+                        meta_data.create_dataset('name', data=np.array(self.generated_files_metadata['file_name'], dtype=dt))
+                    else:
+                        # Optional: could update existing metadata datasets here if desired
+                        pass
 
-        with h5py.File("generated_loop_data.h5", "w") as f:
-            meta_data = f.create_group("meta_data")
-            meta_data.create_dataset('index', data=np.array(self.new_files['id'], dtype='int'))
-            meta_data.create_dataset('path', data=np.array(self.new_files['file_path'], dtype=dt))
-            meta_data.create_dataset('name', data=np.array(self.new_files['file_name'], dtype=dt))
+                    # Get/create audio_data group
+                    if "audio_data" not in f:
+                        audio_data = f.create_group("audio_data")
+                    else:
+                        audio_data = f["audio_data"]
 
-            audio_data = f.create_group('audio_data')
+                    def save_sample(row):
+                        sample_id = str(row['id'])
+                        if sample_id in audio_data:
+                            # Avoid overwriting existing data (can log if needed)
+                            return
+                        sample_group = audio_data.create_group(sample_id)
+                        sample_group.create_dataset('waveform', data=row['waveform'], compression='gzip')
+                        sample_group.create_dataset('sample_rate', data=row['sample_rate'])
 
-            def save_sample(row):
-                sample_group = audio_data.create_group(str(row['id']))
-                sample_group.create_dataset('waveform', data=row['waveform'], compression='gzip')
-                sample_group.create_dataset('sample_rate', data=row['sample_rate'])
-
-            # Use ThreadPoolExecutor for parallelism
-            with ThreadPoolExecutor(max_workers=8) as executor:
-                list(tqdm(executor.map(save_sample, [row for _, row in self.new_audio.iterrows()]), total=len(self.new_audio)))
+                    # Use ThreadPoolExecutor for speed
+                    with ThreadPoolExecutor(max_workers=8) as executor:
+                        list(tqdm(
+                            executor.map(save_sample, [row for _, row in self.generated_files_audio.iterrows()]),
+                            total=len(self.generated_files_audio),
+                            desc="Saving new audio to HDF5"
+                        ))
