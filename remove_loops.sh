@@ -1,0 +1,5 @@
+rm 'audio_metadata - loops.csv'
+rm 'audio_metadata - filtered_copy.csv'
+rm 'generated_loop_data.h5'
+rm -r 'loops/'
+cp 'audio_metadata - filtered.csv' 'audio_metadata - filtered_copy.csv'
