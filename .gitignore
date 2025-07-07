@@ -7,3 +7,6 @@ wtfmath.py
 looper.ipynb
 main.ipynb
 filter.ipynb
+loop_generator.ipynb
+loop_generator_old.py
+loops/*
