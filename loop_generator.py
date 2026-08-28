@@ -7,7 +7,8 @@ from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor
 
 class LoopGenerator:
-    def __init__(self, swing=.55, velocity_var=.1, note_var=2/12, dir_path="loops", bpm_min=70, bpm_max=180): # swing of .5 is neutral
+    def __init__(self, save_loops=True, swing=.55, velocity_var=.1, note_var=2/12, dir_path="loops", bpm_min=70, bpm_max=180): # swing of .5 is neutral
+        self.save_loops = save_loops
         self.swing = swing
         self.velocity_var = velocity_var
         self.note_var = note_var
@@ -178,7 +179,9 @@ class LoopGenerator:
             os.makedirs(os.path.join(self.dir_path, category, sub_category), exist_ok=True)
             file_name = f'{sub_category}_{category}_{self.cat_and_sub_cat_id}.wav'
             file_path = os.path.join(self.dir_path, category, sub_category, file_name)
-        wavf.write(file_path, sr, loop)
+        
+        if self.save_loops:
+            wavf.write(file_path, sr, loop)
         
         new_row = rows.iloc[0].to_dict()
         new_row['id'] = self.id
