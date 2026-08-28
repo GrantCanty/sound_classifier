@@ -163,5 +163,5 @@ except Exception as e:
 
 assert len(set(df_md['audio_hash'])) == len(joined_df)
 joined_df.drop(columns=['is_used'], inplace=True)
-joined_df.sort_values(by='file_path').to_csv(out_path, header=True, index=False, encoding='utf-8-sig')
+joined_df.sort_values(by='file_path').to_csv(out_path, header=True, index=False, encoding='utf-8-sig', sep=";")
 logger.info(f"Successfully saved file to {out_path}")
