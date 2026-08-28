@@ -132,7 +132,7 @@ logger.info("Loading reference file")
 reference_df = pd.read_csv('ref_2.csv')
 
 # only keep data that has been classified
-filtered_results = reference_df[reference_df['group'].notna()]
+filtered_results = reference_df[reference_df['group'].notna()].copy()
 filtered_results['is_used'] = True
 
 # split the path and make it all lower case to match the paths in filtered results
@@ -159,7 +159,7 @@ logger.info(f"Joined file final count: {len(joined_df)}")
 try:
     joined_df.drop(columns=['Unnamed: 52'], inplace=True)
 except Exception as e:
-    print(e)
+    None
 
 assert len(set(df_md['audio_hash'])) == len(joined_df)
 joined_df.drop(columns=['is_used'], inplace=True)
