@@ -39,7 +39,7 @@ if not ref_path.exists():
     logger.error(f'--reference path {ref_path} does not exist. Exiting program')
     sys.exit()
 
-out_path = Path(out)
+out_path = Path("data" , "csv" , out)
 if out_path.suffix.lower() != ".csv":
     if out_path.suffix:
         logger.warning(f"--output path {out} is not a .csv file. Updating extension")
@@ -164,4 +164,4 @@ except Exception as e:
 assert len(set(df_md['audio_hash'])) == len(joined_df)
 joined_df.drop(columns=['is_used'], inplace=True)
 joined_df.sort_values(by='file_path').to_csv(out_path, header=True, index=False, encoding='utf-8-sig')
-logger.info(f"Successfully saved file as {out_path}")
+logger.info(f"Successfully saved file to {out_path}")
