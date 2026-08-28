@@ -15,3 +15,6 @@ venv
 loops
 archives
 .vscode
+
+main.ipynb
+.DS_Store
